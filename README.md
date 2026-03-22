@@ -16,6 +16,7 @@ Windows Spotlight is not natively available on some LTSC editions. This project 
 - Bing market selection during setup
 - configurable retention for generated images
 - automatic fallback to the latest valid image
+- UHD image download with automatic resize to screen resolution
 - QR code linking to a Wikipedia search for the image subject
 - local logging
 - scheduled task running as `SYSTEM`
@@ -102,11 +103,15 @@ At each run, the main script:
 
 1. reads `config.json`
 2. calls the Bing API for the configured market
-3. downloads the current image
-4. renders the title and copyright on the image
-5. saves a dated image in `rendered`
-6. applies that image to the lock screen through `HKLM`
-7. removes older images according to the configured retention period
+3. downloads the UHD version of the current image (3840x2160)
+4. detects the primary screen resolution via WMI
+5. resizes the image to match the screen resolution
+6. renders the title and copyright on the image
+7. saves a dated image in `rendered`
+8. applies that image to the lock screen through `HKLM`
+9. removes older images according to the configured retention period
+
+If the screen resolution cannot be detected (e.g. headless SYSTEM session), the UHD source is used as-is.
 
 Using a dated filename helps reduce Windows lock screen caching issues.
 

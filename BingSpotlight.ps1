@@ -37,6 +37,25 @@ function Write-Log {
     Add-Content -Path $LogPath -Value $line
 }
 
+function Get-ScreenResolution {
+    try {
+        $monitor = Get-CimInstance -ClassName Win32_VideoController |
+            Where-Object { $_.CurrentHorizontalResolution -gt 0 } |
+            Select-Object -First 1
+
+        if ($monitor) {
+            return [pscustomobject]@{
+                Width  = [int]$monitor.CurrentHorizontalResolution
+                Height = [int]$monitor.CurrentVerticalResolution
+            }
+        }
+    }
+    catch {
+        Write-Log -Level "WARN" -Message ("Screen resolution detection failed: {0}" -f $_.Exception.Message)
+    }
+    return $null
+}
+
 function Get-DefaultConfig {
     return [ordered]@{
         Market = "fr-FR"
@@ -143,8 +162,10 @@ function Get-BingMetadata {
     $title = if ([string]::IsNullOrWhiteSpace($image.title)) { "Bing" } else { $image.title.Trim() }
     $copyright = if ([string]::IsNullOrWhiteSpace($image.copyright)) { "" } else { $image.copyright.Trim() }
 
+    $rawUrl = $image.url -replace '1920x1080', 'UHD'
+
     return [pscustomobject]@{
-        ImageUrl = "https://www.bing.com$($image.url)"
+        ImageUrl = "https://www.bing.com$rawUrl"
         Title = $title
         Copyright = $copyright
     }
@@ -247,11 +268,15 @@ function Render-LockScreenImage {
         [Parameter(Mandatory = $true)]
         [string]$Subtitle,
 
-        [string]$QrCodePath
+        [string]$QrCodePath,
+
+        [int]$TargetWidth = 0,
+        [int]$TargetHeight = 0
     )
 
     Add-Type -AssemblyName System.Drawing
 
+    $sourceBitmap = $null
     $bitmap = $null
     $graphics = $null
     $bgBrush = $null
@@ -262,7 +287,25 @@ function Render-LockScreenImage {
     $qrBitmap = $null
 
     try {
-        $bitmap = [System.Drawing.Bitmap]::FromFile($InputPath)
+        $sourceBitmap = [System.Drawing.Bitmap]::FromFile($InputPath)
+
+        if ($TargetWidth -gt 0 -and $TargetHeight -gt 0 -and
+            ($sourceBitmap.Width -ne $TargetWidth -or $sourceBitmap.Height -ne $TargetHeight)) {
+            $bitmap = [System.Drawing.Bitmap]::new($TargetWidth, $TargetHeight)
+            $resizeGraphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $resizeGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $resizeGraphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+            $resizeGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $resizeGraphics.DrawImage($sourceBitmap, 0, 0, $TargetWidth, $TargetHeight)
+            $resizeGraphics.Dispose()
+            $sourceBitmap.Dispose()
+            $sourceBitmap = $null
+        }
+        else {
+            $bitmap = $sourceBitmap
+            $sourceBitmap = $null
+        }
+
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         $graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
@@ -315,6 +358,7 @@ function Render-LockScreenImage {
         if ($bgBrush) { $bgBrush.Dispose() }
         if ($graphics) { $graphics.Dispose() }
         if ($bitmap) { $bitmap.Dispose() }
+        if ($sourceBitmap) { $sourceBitmap.Dispose() }
     }
 }
 
@@ -397,12 +441,23 @@ try {
             Write-Log -Level "WARN" -Message ("QR code generation skipped: {0}" -f $_.Exception.Message)
         }
 
-        Render-LockScreenImage `
-            -InputPath $SourceImagePath `
-            -OutputPath $RenderedImagePath `
-            -Title $metadata.Title `
-            -Subtitle $metadata.Copyright `
-            -QrCodePath $qrPath
+        $screenRes = Get-ScreenResolution
+        $renderParams = @{
+            InputPath  = $SourceImagePath
+            OutputPath = $RenderedImagePath
+            Title      = $metadata.Title
+            Subtitle   = $metadata.Copyright
+            QrCodePath = $qrPath
+        }
+        if ($screenRes) {
+            $renderParams.TargetWidth  = $screenRes.Width
+            $renderParams.TargetHeight = $screenRes.Height
+            Write-Log -Message ("Screen resolution detected: {0}x{1}" -f $screenRes.Width, $screenRes.Height)
+        }
+        else {
+            Write-Log -Level "WARN" -Message "Screen resolution not detected, using source image size."
+        }
+        Render-LockScreenImage @renderParams
 
         Write-Log -Message ("Rendered image created: {0}" -f $RenderedImagePath)
 
