@@ -167,12 +167,6 @@ The script asks the user to type `OUI` to confirm, then it:
 - the Bing endpoint used here is an unofficial `HPImageArchive` API
 - this project is not affiliated with Microsoft
 
-## Suggested GitHub repository description
-
-```text
-PowerShell tool for bringing a Bing Spotlight-like lock screen experience to Windows 11 LTSC.
-```
-
 ## License
 
 This repository is licensed under the GNU Affero General Public License v3.0.
