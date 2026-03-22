@@ -1,6 +1,6 @@
 # BingSpotlight
 
-A PowerShell project that brings a Bing Spotlight-like lock screen experience to Windows 11 LTSC.
+A PowerShell project that brings a Bing Spotlight-like lock screen experience to Windows 11-10 LTSC. Should also work with non-LTSC Windows and probably not with Home versions.
 
 The project downloads the current Bing image, renders a text banner on top of it, applies the generated image to the Windows lock screen through the registry, keeps a local image history, and falls back to the latest valid image if Bing is unavailable.
 
