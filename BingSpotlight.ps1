@@ -10,6 +10,7 @@ $LogDir = Join-Path $BaseDir "logs"
 $LogPath = Join-Path $LogDir "BingSpotlight.log"
 $ConfigPath = Join-Path $BaseDir "config.json"
 $SourceImagePath = Join-Path $SourceDir "bing_source.jpg"
+$QrCodeImagePath = Join-Path $SourceDir "qrcode.png"
 $CurrentDate = Get-Date -Format "yyyy-MM-dd"
 $RenderedImagePath = Join-Path $RenderedDir ("lockscreen_{0}.jpg" -f $CurrentDate)
 $RegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
@@ -149,6 +150,58 @@ function Get-BingMetadata {
     }
 }
 
+function Get-ImageDescription {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Copyright
+    )
+
+    # Strip the trailing copyright parenthetical, e.g. " (© Agency/Author)"
+    # Matches the last " (" before a copyright symbol or the end of the string
+    $stripped = $Copyright -replace '\s*\([^)]*[\u00a9\(C\)©].*?\)\s*$', ''
+    $stripped = $stripped.Trim().TrimEnd(',')
+
+    if ([string]::IsNullOrWhiteSpace($stripped)) {
+        return $Copyright
+    }
+
+    return $stripped
+}
+
+function Get-WikipediaSearchUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Description,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Market
+    )
+
+    $lang = $Market.Split('-')[0].ToLower()
+    if ([string]::IsNullOrWhiteSpace($lang) -or $lang.Length -ne 2) {
+        $lang = "en"
+    }
+
+    $encoded = [System.Uri]::EscapeDataString($Description)
+    return "https://{0}.wikipedia.org/w/index.php?search={1}" -f $lang, $encoded
+}
+
+function Download-QrCodeImage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Data,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath,
+
+        [int]$SizePx = 150
+    )
+
+    $encoded = [System.Uri]::EscapeDataString($Data)
+    $apiUrl = "https://api.qrserver.com/v1/create-qr-code/?size={0}x{0}&format=png&margin=4&data={1}" -f $SizePx, $encoded
+    Invoke-WebRequest -Uri $apiUrl -OutFile $DestinationPath -UseBasicParsing
+}
+
 function Download-SourceImage {
     param(
         [Parameter(Mandatory = $true)]
@@ -192,7 +245,9 @@ function Render-LockScreenImage {
         [string]$Title,
 
         [Parameter(Mandatory = $true)]
-        [string]$Subtitle
+        [string]$Subtitle,
+
+        [string]$QrCodePath
     )
 
     Add-Type -AssemblyName System.Drawing
@@ -204,6 +259,7 @@ function Render-LockScreenImage {
     $fontTitle = $null
     $fontSubtitle = $null
     $encoderParams = $null
+    $qrBitmap = $null
 
     try {
         $bitmap = [System.Drawing.Bitmap]::FromFile($InputPath)
@@ -230,6 +286,15 @@ function Render-LockScreenImage {
         $graphics.DrawString($Title, $fontTitle, [System.Drawing.Brushes]::White, [System.Drawing.PointF]::new($paddingX, $titleTop))
         $graphics.DrawString($Subtitle, $fontSubtitle, $subtitleBrush, [System.Drawing.PointF]::new($paddingX, $subtitleTop))
 
+        if ($QrCodePath -and (Test-Path -LiteralPath $QrCodePath)) {
+            $qrBitmap = [System.Drawing.Bitmap]::FromFile($QrCodePath)
+            $qrSize = [Math]::Max([int]($bannerHeight * 0.72), 64)
+            $qrX = $width - $paddingX - $qrSize
+            $qrY = $bannerTop + [int](($bannerHeight - $qrSize) / 2)
+            $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $graphics.DrawImage($qrBitmap, $qrX, $qrY, $qrSize, $qrSize)
+        }
+
         $jpegEncoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
             Where-Object { $_.MimeType -eq "image/jpeg" } |
             Select-Object -First 1
@@ -242,6 +307,7 @@ function Render-LockScreenImage {
         $bitmap.Save($OutputPath, $jpegEncoder, $encoderParams)
     }
     finally {
+        if ($qrBitmap) { $qrBitmap.Dispose() }
         if ($encoderParams) { $encoderParams.Dispose() }
         if ($fontSubtitle) { $fontSubtitle.Dispose() }
         if ($fontTitle) { $fontTitle.Dispose() }
@@ -319,11 +385,24 @@ try {
         Download-SourceImage -Url $metadata.ImageUrl -DestinationPath $SourceImagePath -Config $config
         Write-Log -Message "Source image downloaded."
 
+        $qrPath = $null
+        try {
+            $imageDescription = Get-ImageDescription -Copyright $metadata.Copyright
+            $wikiUrl = Get-WikipediaSearchUrl -Description $imageDescription -Market $config.Market
+            Download-QrCodeImage -Data $wikiUrl -DestinationPath $QrCodeImagePath -SizePx 200
+            $qrPath = $QrCodeImagePath
+            Write-Log -Message ("QR code generated for: {0}" -f $wikiUrl)
+        }
+        catch {
+            Write-Log -Level "WARN" -Message ("QR code generation skipped: {0}" -f $_.Exception.Message)
+        }
+
         Render-LockScreenImage `
             -InputPath $SourceImagePath `
             -OutputPath $RenderedImagePath `
             -Title $metadata.Title `
-            -Subtitle $metadata.Copyright
+            -Subtitle $metadata.Copyright `
+            -QrCodePath $qrPath
 
         Write-Log -Message ("Rendered image created: {0}" -f $RenderedImagePath)
 

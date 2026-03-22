@@ -16,6 +16,7 @@ Windows Spotlight is not natively available on some LTSC editions. This project 
 - Bing market selection during setup
 - configurable retention for generated images
 - automatic fallback to the latest valid image
+- QR code linking to a Wikipedia search for the image subject
 - local logging
 - scheduled task running as `SYSTEM`
 - clean uninstall with explicit confirmation
@@ -109,6 +110,12 @@ At each run, the main script:
 
 Using a dated filename helps reduce Windows lock screen caching issues.
 
+## QR code
+
+Each rendered image includes a small QR code on the right side of the banner. Scanning it opens a Wikipedia search page for the image subject, using the language matching the configured Bing market.
+
+The QR code is generated via the [goqr.me](https://goqr.me/api/) public API. If the API is unreachable, the image is rendered normally without the QR code.
+
 ## Network failure behavior
 
 The project does not blindly overwrite the current state when Bing is unavailable.
@@ -166,8 +173,15 @@ The script asks the user to type `OUI` to confirm, then it:
 
 - the project targets Windows PowerShell 5.1, not PowerShell 7 as the primary runtime
 - `System.Drawing` is used for image rendering
+- the QR code is generated via the goqr.me public API; if it is down, the image renders without it
 - the Bing endpoint used here is an unofficial `HPImageArchive` API
 - this project is not affiliated with Microsoft
+
+## Suggested GitHub repository description
+
+```text
+PowerShell tool for bringing a Bing Spotlight-like lock screen experience to Windows 11 LTSC.
+```
 
 ## License
 
