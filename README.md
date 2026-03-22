@@ -4,6 +4,8 @@ A PowerShell project that brings a Bing Spotlight-like lock screen experience to
 
 The project downloads the current Bing image, renders a text banner on top of it, applies the generated image to the Windows lock screen through the registry, keeps a local image history, and falls back to the latest valid image if Bing is unavailable.
 
+![Plugin Screenshot](https://github.com/guilamu/gf-advanced-expiring-entries/blob/main/screenshot.png)
+
 ## Why this project
 
 Windows Spotlight is not natively available on some LTSC editions. This project provides a simple, local, and installable alternative based on Windows PowerShell 5.1.
