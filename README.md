@@ -2,7 +2,7 @@
 
 A PowerShell project that brings a Bing Spotlight-like lock screen experience to Windows 11-10 LTSC. Should also work with non-LTSC Windows and probably not with Home versions.
 
-The project downloads the current Bing image, renders a text banner on top of it, applies the generated image to the Windows lock screen through the registry, keeps a local image history, and falls back to the latest valid image if Bing is unavailable.
+The project downloads the current Bing image, saves a clean original copy, renders a text banner on a separate copy used as the lock screen image, applies it via the registry, keeps a local image history, and falls back to the latest valid image if Bing is unavailable.
 
 ![Plugin Screenshot](https://github.com/guilamu/BingSpotLight/blob/main/screenshot.jpg)
 
@@ -100,6 +100,7 @@ C:\ProgramData\BingSpotlight\
 │   └── bing_source.jpg
 └── rendered\
     ├── lockscreen_2026-03-22.jpg
+    ├── original_2026-03-22.jpg
     └── ...
 ```
 
@@ -140,10 +141,11 @@ At each run, the main script:
 3. downloads the UHD version of the current image (3840x2160)
 4. detects the primary screen resolution via WMI
 5. resizes the image to match the screen resolution
-6. renders the title and copyright on the image
-7. saves a dated image in `rendered`
-8. applies that image to the lock screen through `HKLM`
-9. removes older images according to the configured retention period
+6. saves the clean original image (no text, no banner) as a dated JPEG in `rendered`
+7. renders the title, copyright, and QR code banner on a copy of the image
+8. saves the copy as the lock screen JPEG in `rendered`
+9. applies the lock screen image through `HKLM`
+10. removes older images according to the configured retention period
 
 If the screen resolution cannot be detected (e.g. headless SYSTEM session), the UHD source is used as-is.
 
@@ -173,7 +175,7 @@ Start-ScheduledTask -TaskPath "\Custom\" -TaskName "BingSpotlight_LockScreen"
 
 Then verify:
 
-1. that a `lockscreen_*.jpg` file appears in `C:\ProgramData\BingSpotlight\rendered`
+1. that `lockscreen_*.jpg` and `original_*.jpg` files appear in `C:\ProgramData\BingSpotlight\rendered`
 2. that the log contains a complete successful run
 3. that the lock screen shows the generated image
 
@@ -189,7 +191,8 @@ Expected lines usually include:
 [INFO] Execution started. RetentionDays=...
 [INFO] Metadata retrieved: ...
 [INFO] Source image downloaded.
-[INFO] Rendered image created: ...
+[INFO] Original image saved (clean): ...
+[INFO] Lock screen image created: ...
 [INFO] Registry updated successfully.
 [INFO] Cleanup finished.
 ```
@@ -222,6 +225,8 @@ The script asks the user to type `OUI` to confirm, then it:
 
 ### 2026-04-11
 
+- the original image is now preserved as a clean JPEG (`original_*.jpg`) without any text or banner
+- the lock screen image (`lockscreen_*.jpg`) is a separate copy with the banner rendered on top
 - QR code now links to a Google search instead of a Wikipedia search
 - added `Language` configuration key to control the Google search language (`hl` parameter)
 - the installer now prompts for the search language during setup (defaults to the market language)

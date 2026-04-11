@@ -13,6 +13,7 @@ $SourceImagePath = Join-Path $SourceDir "bing_source.jpg"
 $QrCodeImagePath = Join-Path $SourceDir "qrcode.png"
 $CurrentDate = Get-Date -Format "yyyy-MM-dd"
 $RenderedImagePath = Join-Path $RenderedDir ("lockscreen_{0}.jpg" -f $CurrentDate)
+$OriginalImagePath = Join-Path $RenderedDir ("original_{0}.jpg" -f $CurrentDate)
 $RegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
 
 function Initialize-Folders {
@@ -268,6 +269,9 @@ function Render-LockScreenImage {
         [string]$OutputPath,
 
         [Parameter(Mandatory = $true)]
+        [string]$OriginalPath,
+
+        [Parameter(Mandatory = $true)]
         [string]$Title,
 
         [Parameter(Mandatory = $true)]
@@ -311,12 +315,27 @@ function Render-LockScreenImage {
             $sourceBitmap = $null
         }
 
+        $jpegEncoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+            Where-Object { $_.MimeType -eq "image/jpeg" } |
+            Select-Object -First 1
+
+        if (-not $jpegEncoder) {
+            throw "JPEG encoder not found."
+        }
+
+        $encoderParams = New-JpegEncoderParameters -Quality 95
+
+        # --- Save the clean original image (no banner) ---
+        $bitmap.Save($OriginalPath, $jpegEncoder, $encoderParams)
+
+        # --- Draw the banner on top of the image for the lock screen ---
+        $width = $bitmap.Width
+        $height = $bitmap.Height
+
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         $graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
 
-        $width = $bitmap.Width
-        $height = $bitmap.Height
         $paddingX = [Math]::Max([int]($width * 0.014), 24)
         $bannerHeight = [Math]::Max([int]($height * 0.115), 120)
         $titleFontSize = [Math]::Max([int]($height * 0.024), 20)
@@ -343,15 +362,6 @@ function Render-LockScreenImage {
             $graphics.DrawImage($qrBitmap, $qrX, $qrY, $qrSize, $qrSize)
         }
 
-        $jpegEncoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
-            Where-Object { $_.MimeType -eq "image/jpeg" } |
-            Select-Object -First 1
-
-        if (-not $jpegEncoder) {
-            throw "JPEG encoder not found."
-        }
-
-        $encoderParams = New-JpegEncoderParameters -Quality 95
         $bitmap.Save($OutputPath, $jpegEncoder, $encoderParams)
     }
     finally {
@@ -392,6 +402,8 @@ function Get-LatestRenderedImage {
         Select-Object -First 1
 }
 
+
+
 function Restore-LatestRenderedImage {
     $latestImage = Get-LatestRenderedImage
 
@@ -417,6 +429,10 @@ function Remove-OldRenderedImages {
     $limit = (Get-Date).AddDays(-$DaysToKeep)
 
     Get-ChildItem -Path $RenderedDir -Filter "lockscreen_*.jpg" -File |
+        Where-Object { $_.LastWriteTime -lt $limit } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+
+    Get-ChildItem -Path $RenderedDir -Filter "original_*.jpg" -File |
         Where-Object { $_.LastWriteTime -lt $limit } |
         Remove-Item -Force -ErrorAction SilentlyContinue
 }
@@ -448,11 +464,12 @@ try {
 
         $screenRes = Get-ScreenResolution
         $renderParams = @{
-            InputPath  = $SourceImagePath
-            OutputPath = $RenderedImagePath
-            Title      = $metadata.Title
-            Subtitle   = $metadata.Copyright
-            QrCodePath = $qrPath
+            InputPath    = $SourceImagePath
+            OutputPath   = $RenderedImagePath
+            OriginalPath = $OriginalImagePath
+            Title        = $metadata.Title
+            Subtitle     = $metadata.Copyright
+            QrCodePath   = $qrPath
         }
         if ($screenRes) {
             $renderParams.TargetWidth  = $screenRes.Width
@@ -464,7 +481,8 @@ try {
         }
         Render-LockScreenImage @renderParams
 
-        Write-Log -Message ("Rendered image created: {0}" -f $RenderedImagePath)
+        Write-Log -Message ("Original image saved (clean): {0}" -f $OriginalImagePath)
+        Write-Log -Message ("Lock screen image created: {0}" -f $RenderedImagePath)
 
         Set-LockScreenImage -ImagePath $RenderedImagePath
         Write-Log -Message "Registry updated successfully."
