@@ -53,6 +53,27 @@ function Read-Market {
     }
 }
 
+function Read-Language {
+    param(
+        [string]$DefaultValue = "fr"
+    )
+
+    while ($true) {
+        $response = Read-Host ("Code langue pour la recherche Google (QR code) ? ex: fr, en, de [default: {0}]" -f $DefaultValue)
+
+        if ([string]::IsNullOrWhiteSpace($response)) {
+            return $DefaultValue
+        }
+
+        $lang = $response.Trim().ToLower()
+        if ($lang -match '^[a-z]{2}$') {
+            return $lang
+        }
+
+        Write-Host "Saisis un code langue a deux lettres (ex: fr, en, de)."
+    }
+}
+
 function Ensure-InstallFolders {
     foreach ($path in @($InstallDir, (Join-Path $InstallDir "logs"), (Join-Path $InstallDir "source"), (Join-Path $InstallDir "rendered"))) {
         if (-not (Test-Path -LiteralPath $path)) {
@@ -64,11 +85,13 @@ function Ensure-InstallFolders {
 function Save-Config {
     param(
         [int]$RetentionDays,
-        [string]$Market
+        [string]$Market,
+        [string]$Language
     )
 
     $config = [pscustomobject]@{
         Market = $Market
+        Language = $Language
         RetentionDays = $RetentionDays
         RetryCount = 5
         RetryDelaySeconds = 15
@@ -139,16 +162,18 @@ function Register-BingTask {
 try {
     $retentionDays = Read-RetentionDays
     $market = Read-Market
+    $language = Read-Language -DefaultValue ($market.Split('-')[0].ToLower())
 
     Ensure-InstallFolders
     Install-MainScript
     Install-UninstallScript
-    Save-Config -RetentionDays $retentionDays -Market $market
+    Save-Config -RetentionDays $retentionDays -Market $market -Language $language
     Register-BingTask
 
     Write-Host "Installation terminee."
     Write-Host ("Retention configuree : {0} jour(s)." -f $retentionDays)
     Write-Host ("Marche Bing configure : {0}" -f $market)
+    Write-Host ("Langue de recherche Google : {0}" -f $language)
     Write-Host ("Script installe dans : {0}" -f $MainScriptInstallPath)
     Write-Host ("Desinstallation disponible dans : {0}" -f $UninstallScriptInstallPath)
     Write-Host ("Configuration ecrite dans : {0}" -f $ConfigPath)

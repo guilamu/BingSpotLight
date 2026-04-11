@@ -17,7 +17,7 @@ Windows Spotlight is not natively available on some LTSC editions. This project 
 - configurable retention for generated images
 - automatic fallback to the latest valid image
 - UHD image download with automatic resize to screen resolution
-- QR code linking to a Wikipedia search for the image subject
+- QR code linking to a Google search for the image subject
 - local logging
 - scheduled task running as `SYSTEM`
 - clean uninstall with explicit confirmation
@@ -55,6 +55,7 @@ The installer asks for:
 
 1. how many days generated images should be kept
 2. which Bing market to use, for example `fr-FR` or `en-US`
+3. which language to use for the Google search QR code, for example `fr` or `en` (defaults to the market language)
 
 After installation, the files are copied to:
 
@@ -91,11 +92,20 @@ Example:
 ```json
 {
   "Market": "fr-FR",
+  "Language": "fr",
   "RetentionDays": 14,
   "RetryCount": 5,
   "RetryDelaySeconds": 15
 }
 ```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `Market` | string | `fr-FR` | Bing API market code |
+| `Language` | string | derived from Market | Two-letter language code used for the Google search QR code (`fr`, `en`, `de`, …) |
+| `RetentionDays` | int | `14` | Number of days to keep rendered images |
+| `RetryCount` | int | `5` | Maximum number of retry attempts for network calls |
+| `RetryDelaySeconds` | int | `15` | Delay in seconds between retry attempts |
 
 ## How it works
 
@@ -117,7 +127,7 @@ Using a dated filename helps reduce Windows lock screen caching issues.
 
 ## QR code
 
-Each rendered image includes a small QR code on the right side of the banner. Scanning it opens a Wikipedia search page for the image subject, using the language matching the configured Bing market.
+Each rendered image includes a small QR code on the right side of the banner. Scanning it opens a Google search page for the image subject, using the language specified in the `Language` configuration key.
 
 The QR code is generated via the [goqr.me](https://goqr.me/api/) public API. If the API is unreachable, the image is rendered normally without the QR code.
 
@@ -179,9 +189,19 @@ The script asks the user to type `OUI` to confirm, then it:
 - the project targets Windows PowerShell 5.1, not PowerShell 7 as the primary runtime
 - `System.Drawing` is used for image rendering
 - the QR code is generated via the goqr.me public API; if it is down, the image renders without it
+- the Google search language (`hl` parameter) is controlled by the `Language` configuration key
 - the Bing endpoint used here is an unofficial `HPImageArchive` API
 - this project is not affiliated with Microsoft
 
+
+## Changelog
+
+### 2026-04-11
+
+- QR code now links to a Google search instead of a Wikipedia search
+- added `Language` configuration key to control the Google search language (`hl` parameter)
+- the installer now prompts for the search language during setup (defaults to the market language)
+- existing installations without `Language` in `config.json` will automatically derive it from the `Market` value
 
 ## License
 

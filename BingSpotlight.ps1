@@ -59,6 +59,7 @@ function Get-ScreenResolution {
 function Get-DefaultConfig {
     return [ordered]@{
         Market = "fr-FR"
+        Language = "fr"
         RetentionDays = 14
         RetryCount = 5
         RetryDelaySeconds = 15
@@ -99,6 +100,10 @@ function Read-Config {
 
     if ([string]::IsNullOrWhiteSpace([string]$configData.Market)) {
         $configData.Market = "fr-FR"
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$configData.Language)) {
+        $configData.Language = $configData.Market.Split('-')[0].ToLower()
     }
 
     if ($configData.RetentionDays -lt 1) {
@@ -189,22 +194,22 @@ function Get-ImageDescription {
     return $stripped
 }
 
-function Get-WikipediaSearchUrl {
+function Get-GoogleSearchUrl {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Description,
 
         [Parameter(Mandatory = $true)]
-        [string]$Market
+        [string]$Language
     )
 
-    $lang = $Market.Split('-')[0].ToLower()
+    $lang = $Language.ToLower()
     if ([string]::IsNullOrWhiteSpace($lang) -or $lang.Length -ne 2) {
         $lang = "en"
     }
 
     $encoded = [System.Uri]::EscapeDataString($Description)
-    return "https://{0}.wikipedia.org/w/index.php?search={1}" -f $lang, $encoded
+    return "https://www.google.com/search?q={0}&hl={1}" -f $encoded, $lang
 }
 
 function Download-QrCodeImage {
@@ -432,10 +437,10 @@ try {
         $qrPath = $null
         try {
             $imageDescription = Get-ImageDescription -Copyright $metadata.Copyright
-            $wikiUrl = Get-WikipediaSearchUrl -Description $imageDescription -Market $config.Market
-            Download-QrCodeImage -Data $wikiUrl -DestinationPath $QrCodeImagePath -SizePx 200
+            $searchUrl = Get-GoogleSearchUrl -Description $imageDescription -Language $config.Language
+            Download-QrCodeImage -Data $searchUrl -DestinationPath $QrCodeImagePath -SizePx 200
             $qrPath = $QrCodeImagePath
-            Write-Log -Message ("QR code generated for: {0}" -f $wikiUrl)
+            Write-Log -Message ("QR code generated for: {0}" -f $searchUrl)
         }
         catch {
             Write-Log -Level "WARN" -Message ("QR code generation skipped: {0}" -f $_.Exception.Message)
