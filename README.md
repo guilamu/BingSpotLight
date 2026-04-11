@@ -63,6 +63,30 @@ After installation, the files are copied to:
 C:\ProgramData\BingSpotlight
 ```
 
+## Updating an existing installation
+
+No reinstall is needed. Copy the updated script over the installed one:
+
+```powershell
+Copy-Item ".\BingSpotlight.ps1" "C:\ProgramData\BingSpotlight\BingSpotlight.ps1" -Force
+```
+
+If the new version introduces configuration keys (see [Changelog](#changelog)), add them manually to `C:\ProgramData\BingSpotlight\config.json`. Missing keys are usually handled with automatic defaults, but adding them explicitly is recommended.
+
+After updating, trigger a test run to confirm everything works:
+
+```powershell
+Start-ScheduledTask -TaskPath "\Custom\" -TaskName "BingSpotlight_LockScreen"
+```
+
+Then check the log:
+
+```powershell
+Get-Content "C:\ProgramData\BingSpotlight\logs\BingSpotlight.log" -Tail 20
+```
+
+The scheduled task and the rest of the installed structure remain unchanged.
+
 ## Installed structure
 
 ```text
